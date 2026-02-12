@@ -107,3 +107,98 @@
 
     const fishWrap = document.getElementById('fishWrap');
     const canvas = document.getElementById('fx');
+    const ctx = canvas.getContext('2d');
+    const deadStamp = document.getElementById('deadStamp');
+
+    let scale = 0.8; 
+    let isDead = false;
+    let feedCount = 0;
+    // MODIFICATION ICI : On fixe à 10 pile
+    const explodeAt = 10; 
+    let particles = [];
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    class Particle {
+      constructor(x, y, color, speed) {
+        this.x = x; this.y = y;
+        this.vx = (Math.random() - 0.5) * speed;
+        this.vy = (Math.random() - 0.5) * speed;
+        this.life = 1;
+        this.color = color;
+        this.size = Math.random() * 8 + 2;
+      }
+      draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        this.x += this.vx; this.y += this.vy;
+        this.life -= 0.015;
+      }
+    }
+
+    function triggerFeed(broadcast = true) {
+      if(isDead) return;
+      feedCount++;
+      scale += 0.18; 
+      fishWrap.style.transform = `translate(-50%,-50%) scale(${scale})`;
+      
+      fishWrap.classList.remove('growth-hit');
+      void fishWrap.offsetWidth;
+      fishWrap.classList.add('growth-hit');
+
+      const rect = fishWrap.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      for(let i=0; i<30; i++) particles.push(new Particle(centerX, centerY, 'gold', 10));
+
+      if(feedCount >= explodeAt) explode();
+      if(broadcast) channel.postMessage({type: 'FEED'});
+    }
+
+    function explode() {
+      isDead = true;
+      fishWrap.style.display = 'none';
+      for(let i=0; i<200; i++) {
+        particles.push(new Particle(window.innerWidth/2, window.innerHeight/2, 'orange', 25));
+        particles.push(new Particle(window.innerWidth/2, window.innerHeight/2, 'white', 30));
+      }
+      deadStamp.classList.add('show-stamp');
+    }
+
+    function triggerReset(broadcast = true) {
+      scale = 0.8; feedCount = 0; isDead = false;
+      fishWrap.style.display = 'block';
+      fishWrap.style.transform = `translate(-50%,-50%) scale(0.8)`;
+      deadStamp.classList.remove('show-stamp');
+      particles = [];
+      if(broadcast) channel.postMessage({type: 'RESET'});
+    }
+
+    channel.onmessage = (event) => {
+      if (event.data.type === 'FEED') triggerFeed(false);
+      if (event.data.type === 'RESET') triggerReset(false);
+    };
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles = particles.filter(p => p.life > 0);
+      particles.forEach(p => p.draw());
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    window.addEventListener('keydown', (e) => {
+      if(e.code === 'F9') triggerFeed(true);
+      if(e.code === 'F10') triggerReset(true);
+    });
+  </script>
+</body>
+</html>
